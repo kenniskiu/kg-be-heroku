@@ -456,6 +456,11 @@ module.exports = {
 			credit += sub.credit;
 		}
 		if (enrolled === false && credit <= credit_thresh) {
+			await StudentSubject.create({
+				student_id: student_id,
+				subject_id: subject_id,
+				status: DRAFT,
+			});
 			bucket
 				.file(nameFile)
 				.createWriteStream()
@@ -464,16 +469,22 @@ module.exports = {
 					console.log("Lanjut finish ini");
 					getDownloadURL(ref(storage, nameFile)).then(async (linkFile) => {
 						console.log("link nya => ", linkFile);
-						await StudentSubject.create({
-							student_id: student_id,
-							subject_id: subject_id,
-							proof: nameFile,
-							proof_link: linkFile,
-							status: DRAFT,
-						});
+						await StudentSubject.update(
+							{
+								proof: nameFile,
+								proof_link: linkFile,
+							},
+							{
+								where: {
+									subject_id,
+									student_id,
+								},
+							}
+						);
 					});
 				});
-			return res.sendJson(200, true, "Enrolled Subject");
+			let result = await getParsedPlan(student_id);
+			return res.sendJson(200, true, "Enrolled Subject", result);
 		} else if (credit > credit_thresh) {
 			return res.sendJson(400, false, "Exceeded maximum credit", {
 				credit: credit,
@@ -694,7 +705,7 @@ module.exports = {
 			],
 		});
 		let result = {
-			studentsInformation: students_information,
+			students_information: students_information,
 			subjects_enrolled: subjects_enrolled,
 		};
 
@@ -798,7 +809,7 @@ async function getParsedPlan(student_id) {
 
 	for (let i = 0; i < datadraft.length; i++) {
 		let currStudSub = datadraft[i];
-		console.log(currStudSub.subject_id);
+
 		let currSub = await Subject.findOne({
 			where: {
 				id: currStudSub.subject_id,

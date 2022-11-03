@@ -1,7 +1,14 @@
 const {
+	Administration,
+
 	Student,
+	Lecturer,
+	User,
 
 	MajorSubject,
+	StudentMajor,
+	Major,
+
 	StudentSubject,
 	Subject,
 
@@ -69,8 +76,8 @@ const {
 } = process.env;
 const asyncHandler = require("express-async-handler");
 const { Op } = require("sequelize");
-const scoringController = require("./scoringController");
 const certificateController = require("./certificateController");
+const getParsedPlan = require("../helpers/getParsedPlan");
 
 module.exports = {
 	/**
@@ -161,7 +168,7 @@ module.exports = {
 		let sessions = await Session.findAll({
 			where: {
 				subject_id: sub.id,
-				[Op.not]: { type: [UTS, UAS] },
+				[Op.not]: { type: [UTS, UAS], session_no: 0 },
 			},
 		});
 
@@ -217,13 +224,10 @@ module.exports = {
 			}),
 		]);
 
-		console.log(sesh_id_list);
-
 		// calculate total quiz score
 		for (let i = 0; i < material_all[0].length; i++) {
 			curr_mat = material_all[0][i];
-			// log
-			console.log("quiz ... ", curr_mat?.score);
+
 			quiz_pool += curr_mat?.score;
 		}
 		let counter = material_all[1].length;
@@ -232,8 +236,7 @@ module.exports = {
 		// calculate total assignment score
 		for (let i = 0; i < material_all[2].length; i++) {
 			curr_mat = material_all[2][i];
-			// log
-			console.log("assignment ... ", curr_mat?.score);
+
 			assignment_pool += curr_mat?.score;
 		}
 		counter = material_all[3].length;
@@ -242,16 +245,11 @@ module.exports = {
 		// calculate module / attendance score
 		for (let i = 0; i < material_all[4].length; i++) {
 			curr_mat = material_all[4][i];
-			// log
-			console.log("module ... ", curr_mat?.score);
+
 			module_pool += curr_mat?.score;
 		}
 		counter = material_all[5].length;
 		module_pool = module_pool / counter;
-
-		console.log("quiz", quiz_pool);
-		console.log("assignment", assignment_pool);
-		console.log("module", module_pool);
 
 		let session_midterm = await Session.findOne({
 			where: {
@@ -269,7 +267,6 @@ module.exports = {
 			attributes: ["score"],
 		});
 		midterm_score = midterm_score?.score || 0;
-		console.log("midterm score", midterm_score);
 
 		let session_finals = await Session.findOne({
 			where: {
@@ -286,7 +283,6 @@ module.exports = {
 			attributes: ["score"],
 		});
 		finals_score = finals_score?.score || 0;
-		console.log("finals score", finals_score);
 
 		let final_subject_score =
 			(parseFloat(QUIZ_WEIGHT_ALL) / 100) * quiz_pool +
@@ -296,7 +292,6 @@ module.exports = {
 			(parseFloat(FINALS_WEIGHT) / 100) * finals_score;
 
 		final_subject_score = parseFloat(final_subject_score);
-		console.log("final subject score", final_subject_score);
 
 		if (finals_score) {
 			await StudentSubject.update(
@@ -452,7 +447,90 @@ module.exports = {
 	getPredicate: asyncHandler(async (percent) => {
 		return letterByPercent(percent);
 	}),
+
+	/**
+	 * @desc      student report
+	 * @access    Private
+	 */
+	getReport: asyncHandler(async (student_id) => {
+		const student = await Student.findOne({
+			where: {
+				id: student_id,
+			},
+			include: [
+				{
+					model: User,
+					include: { model: Administration },
+				},
+				{
+					model: Major,
+				},
+				{
+					model: Subject,
+					through: {
+						where: {
+							status: FINISHED,
+						},
+					},
+				},
+			],
+		});
+
+		let parsedPlan = await getParsedPlan(student_id);
+
+		let student_information = {
+			student_name: student?.User?.full_name,
+			nsn: student?.User?.Administration?.nsn,
+			major: student?.Majors[0].name,
+			semester: student?.semester,
+			credit_finished: parsedPlan.finished.credit,
+			subjects_finished: parsedPlan.finished.subjects.length,
+			gpa: parseFloat(
+				(await GPACalculatorFromList(student.Subjects)).toFixed(2)
+			),
+		};
+
+		let subjects = [];
+
+		for (let i = 0; i < student.Subjects.length; i++) {
+			let currsub = student.Subjects[i];
+			let currsub_enrollment_data = currsub.StudentSubject;
+			let subject = {
+				name: currsub.name,
+				credit: currsub.credit,
+				score: currsub_enrollment_data.final_score,
+				predicate: letterByPercent(currsub_enrollment_data.final_score),
+			};
+			subjects.push(subject);
+		}
+
+		let result = {
+			student_information: student_information,
+			subject: subjects,
+		};
+		return result;
+	}),
 };
+
+async function GPACalculatorFromList(subject_list) {
+	let score = 0;
+	let total_cred = 0;
+
+	if (subject_list == null) {
+		return 0;
+	}
+
+	for (let i = 0; i < subject_list.length; i++) {
+		let curr_sub = subject_list[i];
+		score += GPAWeightByLetter(
+			letterByPercent(curr_sub.StudentSubject.final_score),
+			curr_sub.credit
+		);
+		total_cred += curr_sub.credit;
+	}
+
+	return score / total_cred;
+}
 
 function letterByPercent(percent) {
 	if (percent >= parseFloat(FLOOR_A)) {
@@ -477,7 +555,7 @@ function letterByPercent(percent) {
 	return null;
 }
 
-function GPAByLetter(letter, credit) {
+function GPAWeightByLetter(letter, credit) {
 	if (letter === "A") {
 		return parseFloat(WEIGHT_A) * credit;
 	} else if (letter === "A-") {
