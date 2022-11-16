@@ -11,21 +11,16 @@ const {
 	DB_PASSWORD_NONMSIB,
 	DB_NAME_NONMSIB,
 	DB_HOST_NONMSIB,
-
-	DB_USERNAME_GCP,
-	DB_PASSWORD_GCP,
-	DB_NAME_GCP,
-	DB_HOST_GCP,
 } = process.env;
 
 module.exports = {
 	development: {
 		username: "postgres",
-		password: "root",
-		database: "kg",
+		password: "postgres",
+		database: "postgres",
 		host: "localhost",
 		dialect: "postgres",
-		port: 5432,
+		port: 5433,
 		define: {
 			paranoid: true,
 			timestamps: true,
@@ -34,7 +29,19 @@ module.exports = {
 			createdAt: "created_at",
 			updatedAt: "updated_at",
 			deletedAt: "deleted_at",
+			defaultScope: {
+				attributes: {
+					exclude: [
+						"created_at",
+						"updated_at",
+						"deleted_at",
+						"created_by",
+						"updated_by",
+					],
+				},
+			},
 		},
+		logging: false,
 	},
 	nonmsib: {
 		username: DB_USERNAME_NONMSIB,
@@ -85,34 +92,34 @@ module.exports = {
 		},
 	},
 
-	gcpdb: {
-		username: DB_USERNAME_GCP,
-		password: DB_PASSWORD_GCP,
-		database: DB_NAME_GCP,
-		host: DB_HOST_GCP,
-		dialect: DB_DIALECT,
-		define: {
-			paranoid: true,
-			timestamps: true,
-			underscored: true,
-			underscoredAll: true,
-			createdAt: "created_at",
-			updatedAt: "updated_at",
-			deletedAt: "deleted_at",
-			defaultScope: {
-				attributes: {
-					exclude: [
-						"created_at",
-						"updated_at",
-						"deleted_at",
-						"created_by",
-						"updated_by",
-					],
-				},
-			},
-		},
-		logging: false,
-	},
+	// gcpdb: {
+	// 	username: DB_USERNAME_GCP,
+	// 	password: DB_PASSWORD_GCP,
+	// 	database: DB_NAME_GCP,
+	// 	host: DB_HOST_GCP,
+	// 	dialect: DB_DIALECT,
+	// 	define: {
+	// 		paranoid: true,
+	// 		timestamps: true,
+	// 		underscored: true,
+	// 		underscoredAll: true,
+	// 		createdAt: "created_at",
+	// 		updatedAt: "updated_at",
+	// 		deletedAt: "deleted_at",
+	// 		defaultScope: {
+	// 			attributes: {
+	// 				exclude: [
+	// 					"created_at",
+	// 					"updated_at",
+	// 					"deleted_at",
+	// 					"created_by",
+	// 					"updated_by",
+	// 				],
+	// 			},
+	// 		},
+	// 	},
+	// 	logging: false,
+	// },
 
 	production: {
 		username: DB_USERNAME,
